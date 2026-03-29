@@ -250,7 +250,7 @@ function StyleRow({ label, type, value, onChange }: StyleRowProps) {
             <label className="text-xs text-zinc-400 shrink-0 w-20">{label}</label>
 
             {(type === "color-text" || type === "color-bg") && (
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
                     <input
                         type="color"
                         value={value || "#ffffff"}
@@ -258,7 +258,7 @@ function StyleRow({ label, type, value, onChange }: StyleRowProps) {
                         className="w-7 h-7 rounded cursor-pointer border border-zinc-600
               bg-transparent p-0.5"
                     />
-                    <div className="flex items-center flex-1 rounded bg-zinc-700
+                    <div className="flex items-center min-w-0 w-0 flex-1 rounded bg-zinc-700
             border border-zinc-600 focus-within:border-indigo-500 overflow-hidden">
                         <span className="pl-2 text-zinc-400 text-xs select-none">#</span>
                         <input
