@@ -1,4 +1,4 @@
-type Page = "settings" | "task" | "preview" | "custom-css";
+type Page = "settings" | "task" | "preview" | "custom-css" | "default-style";
 
 interface Props {
     current: Page;
@@ -7,6 +7,7 @@ interface Props {
 
 const items: { id: Page; label: string }[] = [
     { id: "settings", label: "⚙️  設定" },
+    { id: "default-style", label: "🎨  預設樣式" },
     { id: "task", label: "📄  任務" },
     { id: "preview", label: "👁  預覽" },
     { id: "custom-css", label: "🎨  自訂 CSS" },

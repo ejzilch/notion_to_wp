@@ -14,6 +14,7 @@ interface Props {
     onUpdate: (style: Partial<BlockStyle>) => void;
     onReset: () => void;
     onClose: () => void;
+    onDelete: () => void;
 }
 
 export default function BlockEditPanel({
@@ -23,6 +24,7 @@ export default function BlockEditPanel({
     onUpdate,
     onReset,
     onClose,
+    onDelete,
 }: Props) {
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [style, setStyle] = useState<Partial<BlockStyle>>(currentStyle);
@@ -197,6 +199,16 @@ export default function BlockEditPanel({
                     className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
                 >
                     清除覆寫
+                </button>
+                <button
+                    onClick={() => {
+                        if (window.confirm("確定要刪除這個區塊嗎？")) {
+                            onDelete();
+                        }
+                    }}
+                    className="text-xs text-red-500 hover:text-red-400 transition-colors"
+                >
+                    刪除區塊
                 </button>
                 <button
                     onClick={() => { setIsDirty(false); onClose(); }}

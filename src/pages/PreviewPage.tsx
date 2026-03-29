@@ -3,13 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { loadSettings } from "../store/settingsStore";
 import StyleEditor from "../components/StyleEditor";
 import BlockEditPanel from "../components/BlockEditPanel";
-import { StyleConfig, buildDefaultStyleConfig, BlockType, BlockStyle, BlockOverrideMap } from "../types/style";
-import { buildStyleTag, buildFinalHtml, buildWpHtml } from "../utils/applyStyles";
+import { StyleConfig, BlockType, BlockStyle, BlockOverrideMap } from "../types/style";
+import { buildStyleTag, buildFinalHtml, buildWpHtml, removeDeletedBlocks } from "../utils/applyStyles";
 import { loadCustomCss } from "../store/customCssStore";
 
 interface Props {
     html: string;
     title: string;
+    defaultStyleConfig: StyleConfig;
 }
 
 interface SelectedBlock {
@@ -17,17 +18,29 @@ interface SelectedBlock {
     blockType: BlockType;
 }
 
-export default function PreviewPage({ html, title }: Props) {
-    const [styleConfig, setStyleConfig] = useState<StyleConfig>(buildDefaultStyleConfig());
+export default function PreviewPage({ html, title, defaultStyleConfig }: Props) {
+    const [styleConfig, setStyleConfig] = useState<StyleConfig>(defaultStyleConfig);
     const [overrides, setOverrides] = useState<BlockOverrideMap>({});
     const [selectedBlock, setSelectedBlock] = useState<SelectedBlock | null>(null);
     const [posting, setPosting] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [customCss, setCustomCss] = useState("");
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [deletedBlocks, setDeletedBlocks] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadCustomCss().then(setCustomCss);
+    }, [html]);
+
+    useEffect(() => {
+        setStyleConfig(defaultStyleConfig);
+    }, [defaultStyleConfig]);
+
+    // html 變動時（新任務），重新載入預設樣式
+    useEffect(() => {
+        setStyleConfig(defaultStyleConfig);
+        setOverrides({});
+        setDeletedBlocks(new Set());
     }, [html]);
 
     // 接收 iframe 點擊事件
@@ -64,12 +77,22 @@ export default function PreviewPage({ html, title }: Props) {
         });
     }
 
+    function handleDeleteBlock(blockIndex: number, blockType: BlockType) {
+        const key = `${blockType}-${blockIndex}`;
+        setDeletedBlocks(prev => new Set([...prev, key]));
+        setSelectedBlock(null);
+    }
+
     const reloadCss = useCallback(() => {
         loadCustomCss().then(setCustomCss);
     }, []);
 
     // 預覽 HTML：帶 data-* 屬性 + 點擊 script
-    const previewHtml = buildFinalHtml(html, styleConfig, overrides);
+    const filteredHtml = removeDeletedBlocks(
+        buildFinalHtml(html, styleConfig, overrides),
+        deletedBlocks
+    );
+    const previewHtml = filteredHtml;
 
     const clickScript = `
     <script>
@@ -123,7 +146,11 @@ export default function PreviewPage({ html, title }: Props) {
         try {
             const settings = await loadSettings();
             // 輸出給 WP：移除 data-* 屬性
-            const finalHtml = buildWpHtml(html, styleConfig, overrides);
+            const finalHtml = removeDeletedBlocks(
+                buildWpHtml(html, styleConfig, overrides),
+                deletedBlocks
+            );
+
             const link = await invoke<string>("post_to_wp", {
                 title,
                 content: finalHtml,
@@ -218,6 +245,9 @@ export default function PreviewPage({ html, title }: Props) {
                     }
                     onReset={() => handleOverrideReset(selectedBlock.blockIndex)}
                     onClose={() => setSelectedBlock(null)}
+                    onDelete={() =>
+                        handleDeleteBlock(selectedBlock.blockIndex, selectedBlock.blockType)
+                    }
                 />
             )}
         </div>
