@@ -157,10 +157,10 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
     `;
 
     const initialDoc = useMemo(() => {
-        return buildInitialDoc(html, clickScript);
+        return buildInitialDoc();
     }, [html]);
 
-    function buildInitialDoc(html: string, clickScript: string): string {
+    function buildInitialDoc(): string {
         return `<!DOCTYPE html><html><head>
             <style id="__base__">
             * { box-sizing: border-box; }
