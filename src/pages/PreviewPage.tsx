@@ -176,7 +176,7 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
             table { border-collapse: collapse; width: 100%; }
             td, th { border: 1px solid #ddd; padding: 8px 14px; }
             th { background: #f8f8f8; font-weight: 600; }
-            ul, ol { padding-left: 1.5rem; }
+            ul, ol { padding-left: 1rem; }
             hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5rem 0; }
             </style>
             <style id="__custom-styles__"></style>
@@ -198,7 +198,6 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
             window.addEventListener('message', function(e) {
                 if (!e.data || e.data.type !== 'update-styles') return;
 
-                // 直接設定 textContent，不用 regex
                 var styleEl = document.getElementById('__custom-styles__');
                 if (styleEl) styleEl.textContent = e.data.styleTag || '';
 

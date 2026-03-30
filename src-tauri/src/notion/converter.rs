@@ -172,33 +172,38 @@ async fn convert_block_to_html(
         }
 
         "bulleted_list_item" | "numbered_list_item" => {
-                let content = extract_rich_text(&block, block_type);
-                let content = content.replace('\n', "<br>");
-                let mut nested = String::new();
+            let content = extract_rich_text(&block, block_type);
+            let content = content.replace('\n', "<br>");
+            let mut nested = String::new();
 
-                if block["has_children"].as_bool() == Some(true) {
-                    if let Ok(children) = fetch_all_blocks(
-                        &client,
-                        block["id"].as_str().unwrap_or(""),
+            if block["has_children"].as_bool() == Some(true) {
+                if let Ok(children) = fetch_all_blocks(
+                    &client,
+                    block["id"].as_str().unwrap_or(""),
+                    &token,
+                ).await {
+                    let (list_tag, list_attrs) = if block_type == "numbered_list_item" {
+                        ("ol", r#"<!-- wp:list {"ordered":true} -->"#)
+                    } else {
+                        ("ul", "<!-- wp:list -->")
+                    };
+
+                    let inner = blocks_to_list_items(
+                        Arc::clone(&client),
+                        &children,
                         &token,
-                    )
-                    .await
-                    {
-                        let (list_tag, list_attrs) = if block_type == "numbered_list_item" {
-                            ("ol", r#"<!-- wp:list {"ordered":true} -->"#)
-                        } else {
-                            ("ul", "<!-- wp:list -->")
-                        };
+                        Arc::clone(&cache),
+                    ).await;
 
-                        nested = format!(
-                            "\n{}\n<{} class=\"wp-block-list\">\n{}\n</{}>\n<!-- /wp:list -->",
-                            list_attrs,
-                            list_tag,
-                            blocks_to_wp_html(Arc::clone(&client), &children, &token, Arc::clone(&cache)).await,
-                            list_tag,
-                        );
-                    }
+                    nested = format!(
+                        "\n{}\n<{} class=\"wp-block-list\">\n{}\n</{}>\n<!-- /wp:list -->",
+                        list_attrs,
+                        list_tag,
+                        inner,
+                        list_tag,
+                    );
                 }
+            }
 
             format!(
                 "\n<!-- wp:list-item -->\n<li>{}{}</li>\n<!-- /wp:list-item -->\n",
@@ -485,7 +490,10 @@ fn process_rich_text_array(rich_texts: &[Value]) -> String {
             formatted = format!("<del>{}</del>", formatted);
         }
         if annotations["underline"].as_bool() == Some(true) {
-            formatted = format!("<u>{}</u>", formatted);
+            formatted = format!(
+                "<span style=\"text-decoration: underline;\">{}</span>",
+                formatted
+            );
         }
         if annotations["code"].as_bool() == Some(true) {
             formatted = format!("<code>{}</code>", formatted);
@@ -504,4 +512,27 @@ fn extract_rich_text(block: &Value, block_type: &str) -> String {
     } else {
         String::new()
     }
+}
+
+#[async_recursion]
+async fn blocks_to_list_items(
+    client: Arc<Client>,
+    blocks: &[Value],
+    token: &str,
+    cache: HtmlCache,
+) -> String {
+    let mut items = Vec::new();
+    for block in blocks {
+        let item = convert_block_to_html(
+            Arc::clone(&client),
+            block.clone(),
+            token.to_string(),
+            Arc::clone(&cache),
+        )
+        .await;
+        if !item.is_empty() {
+            items.push(item);
+        }
+    }
+    items.join("\n")
 }
