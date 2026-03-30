@@ -1,6 +1,8 @@
 import { load } from "@tauri-apps/plugin-store";
+import { getPassword, setPassword } from "tauri-plugin-keyring-api";
 
 const STORE_FILE = "settings.bin";
+const KEYRING_SERVICE = "notion_to_wp";
 
 export interface AppSettings {
     notionToken: string;
@@ -9,32 +11,41 @@ export interface AppSettings {
     wpAppPwd: string;
 }
 
-// 獨立出來，避免重複建立
 async function getStore() {
     return await load(STORE_FILE, {
         defaults: {
-            notionToken: "",
             wpUrl: "",
             wpUser: "",
-            wpAppPwd: "",
         },
     });
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
     const store = await getStore();
-    await store.set("notionToken", settings.notionToken);
+
+    // 非敏感資料存 settings.bin
     await store.set("wpUrl", settings.wpUrl);
     await store.set("wpUser", settings.wpUser);
-    await store.set("wpAppPwd", settings.wpAppPwd);
+
+    // 敏感資料存系統 keyring
+    await setPassword(KEYRING_SERVICE, "notionToken", settings.notionToken);
+    await setPassword(KEYRING_SERVICE, "wpAppPwd", settings.wpAppPwd);
+
+    // 清除 settings.bin 裡的舊敏感資料
+    await store.set("notionToken", "");
+    await store.set("wpAppPwd", "");
+
+    await store.save();
 }
 
 export async function loadSettings(): Promise<AppSettings> {
     const store = await getStore();
+
     return {
-        notionToken: (await store.get<string>("notionToken")) ?? "",
         wpUrl: (await store.get<string>("wpUrl")) ?? "",
         wpUser: (await store.get<string>("wpUser")) ?? "",
-        wpAppPwd: (await store.get<string>("wpAppPwd")) ?? "",
+        // 從 keyring 讀取敏感資料
+        notionToken: (await getPassword(KEYRING_SERVICE, "notionToken")) ?? "",
+        wpAppPwd: (await getPassword(KEYRING_SERVICE, "wpAppPwd")) ?? "",
     };
 }

@@ -1,7 +1,7 @@
 mod notion;
 mod wordpress;
 
-use notion::converter::{blocks_to_wp_html, HtmlCache};
+use notion::converter::{HtmlCache, blocks_to_wp_html};
 use notion::fetcher::fetch_all_blocks;
 use once_cell::sync::OnceCell;
 use reqwest::Client;
@@ -30,10 +30,7 @@ pub struct ConvertResult {
 }
 
 #[tauri::command]
-async fn fetch_and_convert(
-    page_id: String,
-    notion_token: String,
-) -> Result<ConvertResult, String> {
+async fn fetch_and_convert(page_id: String, notion_token: String) -> Result<ConvertResult, String> {
     let client = get_client().map_err(|e| e.to_string())?;
     let cache: HtmlCache = Arc::new(Mutex::new(HashMap::new()));
 
@@ -41,9 +38,7 @@ async fn fetch_and_convert(
         .await
         .map_err(|e| e.to_string())?;
 
-    let html =
-        blocks_to_wp_html(Arc::clone(&client), &blocks, &notion_token, cache)
-            .await;
+    let html = blocks_to_wp_html(Arc::clone(&client), &blocks, &notion_token, cache).await;
 
     Ok(ConvertResult { html })
 }
@@ -58,18 +53,23 @@ async fn post_to_wp(
 ) -> Result<String, String> {
     let client = get_client().map_err(|e| e.to_string())?;
     let link: String = wordpress::client::post_to_wordpress(
-        &client, &title, &content, &wp_url, &wp_user, &wp_app_pwd,
+        &client,
+        &title,
+        &content,
+        &wp_url,
+        &wp_user,
+        &wp_app_pwd,
     )
     .await
     .map_err(|e| e.to_string())?;
     Ok(link)
 }
 
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_keyring::init())
         .invoke_handler(tauri::generate_handler![fetch_and_convert])
         .invoke_handler(tauri::generate_handler![fetch_and_convert, post_to_wp])
         .run(tauri::generate_context!())

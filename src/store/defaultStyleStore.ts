@@ -1,5 +1,5 @@
 import { load } from "@tauri-apps/plugin-store";
-import { StyleConfig, buildDefaultStyleConfig } from "../types/style";
+import { StyleConfig, buildDefaultStyleConfig, BlockType } from "../types/style";
 
 const STORE_FILE = "settings.bin";
 
@@ -13,8 +13,19 @@ export async function saveDefaultStyleConfig(config: StyleConfig): Promise<void>
 }
 
 export async function loadDefaultStyleConfig(): Promise<StyleConfig> {
-
     const store = await getStore();
     const saved = await store.get<StyleConfig>("defaultStyleConfig");
-    return saved ?? buildDefaultStyleConfig();
+
+    const defaults = buildDefaultStyleConfig();
+
+    if (!saved) return defaults;
+
+    const merged = Object.fromEntries(
+        (Object.keys(defaults) as BlockType[]).map((k) => [
+            k,
+            { ...defaults[k], ...(saved[k] ?? {}) }
+        ])
+    ) as StyleConfig;
+
+    return merged;
 }

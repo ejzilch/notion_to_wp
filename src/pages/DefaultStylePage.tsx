@@ -9,15 +9,19 @@ interface Props {
 
 export default function DefaultStylePage({ onSave }: Props) {
     const [config, setConfig] = useState<StyleConfig>(buildDefaultStyleConfig());
-    const [saved] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
     useEffect(() => {
         loadDefaultStyleConfig().then(setConfig);
     }, []);
 
     async function handleSave() {
+        setSaveStatus("saving");
         await saveDefaultStyleConfig(config);
         onSave?.(config);
+        setSaveStatus("saved");
+        // 3 秒後回到 idle
+        setTimeout(() => setSaveStatus("idle"), 3000);
     }
 
     async function handleReset() {
@@ -44,10 +48,20 @@ export default function DefaultStylePage({ onSave }: Props) {
                 border-zinc-700 hover:border-red-800 px-3 py-1.5 rounded-lg transition-colors">
                             清除預設
                         </button>
-                        <button onClick={handleSave}
-                            className="text-xs px-4 py-1.5 rounded-lg bg-indigo-600
-                hover:bg-indigo-500 text-white font-medium transition-colors">
-                            {saved ? "✓ 已儲存" : "儲存預設"}
+                        <button
+                            onClick={handleSave}
+                            disabled={saveStatus === "saving"}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                    ${saveStatus === "saved"
+                                    ? "bg-green-600 text-white"
+                                    : saveStatus === "saving"
+                                        ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
+                                        : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                                }`}
+                        >
+                            {saveStatus === "saving" && "儲存中..."}
+                            {saveStatus === "saved" && "✓ 已儲存"}
+                            {saveStatus === "idle" && "儲存預設樣式"}
                         </button>
                     </div>
                 </div>

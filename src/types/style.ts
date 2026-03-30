@@ -1,16 +1,8 @@
 export type BlockType =
-    | "heading_1"
-    | "heading_2"
-    | "heading_3"
-    | "heading_4"
-    | "paragraph"
-    | "quote"
-    | "code"
-    | "callout"
-    | "table"
-    | "bulleted_list_item"
-    | "numbered_list_item"
-    | "divider";
+    | "heading_1" | "heading_2" | "heading_3" | "heading_4"
+    | "paragraph" | "quote" | "code" | "callout"
+    | "table" | "bulleted_list_item" | "numbered_list_item" | "divider"
+    | "link" | "toggle";
 
 export interface BlockStyle {
     color: string;
@@ -45,6 +37,8 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
     bulleted_list_item: "項目清單",
     numbered_list_item: "數字清單",
     divider: "分隔線",
+    link: "連結",
+    toggle: "折疊區塊",
 };
 
 // 每個區塊的獨立覆寫（index 是區塊在 HTML 中的順序）
