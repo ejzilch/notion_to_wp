@@ -105,6 +105,12 @@ export default function StyleEditor({ config, onChange }: Props) {
                                     value={config[type].fontWeight}
                                     onChange={(v) => update(type, "fontWeight", v)}
                                 />
+                                <StyleRow
+                                    label="底線"
+                                    type="text-decoration"
+                                    value={config[type].textDecoration}
+                                    onChange={(v) => update(type, "textDecoration", v)}
+                                />
                                 {/* CSS Class 改成下拉選單 */}
                                 <CssClassRow
                                     value={config[type].cssClass}
@@ -213,7 +219,7 @@ function normalizeFontSize(raw: string): string {
 
 interface StyleRowProps {
     label: string;
-    type: "color-text" | "color-bg" | "font-size" | "font-weight";
+    type: "color-text" | "color-bg" | "font-size" | "font-weight" | "text-decoration";
     value: string;
     onChange: (v: string) => void;
 }
@@ -232,6 +238,8 @@ function StyleRow({ label, type, value, onChange }: StyleRowProps) {
             setDraft(value.replace(/^#/, ""));
         } else if (type === "font-size") {
             setDraft(value.replace(/px$/i, ""));
+        } else if (type === "text-decoration") {
+            setDraft(value);
         } else {
             setDraft(value);
         }
@@ -242,6 +250,8 @@ function StyleRow({ label, type, value, onChange }: StyleRowProps) {
             onChange(normalizeColor(draft));
         } else if (type === "font-size") {
             onChange(normalizeFontSize(draft));
+        } else if (type === "text-decoration") {
+            setDraft(value);
         }
     }
 
@@ -312,6 +322,19 @@ function StyleRow({ label, type, value, onChange }: StyleRowProps) {
                     <option value="500">500 中等</option>
                     <option value="600">600 半粗</option>
                     <option value="700">700 粗</option>
+                </select>
+            )}
+            {type === "text-decoration" && (
+                <select
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="flex-1 px-2 py-1 text-xs rounded bg-zinc-700 border
+                        border-zinc-600 text-white focus:outline-none focus:border-indigo-500"
+                >
+                    <option value="">（預設）</option>
+                    <option value="underline">底線</option>
+                    <option value="none">移除底線</option>
+                    <option value="line-through">刪除線</option>
                 </select>
             )}
         </div>

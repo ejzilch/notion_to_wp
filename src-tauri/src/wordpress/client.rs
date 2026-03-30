@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use reqwest::Client;
 use serde_json::Value;
 
@@ -11,14 +11,14 @@ pub async fn post_to_wordpress(
     wp_user: &str,
     wp_app_pwd: &str,
 ) -> anyhow::Result<String> {
-    let auth_base64 = general_purpose::STANDARD
-        .encode(format!("{}:{}", wp_user, wp_app_pwd));
+    let auth_base64 = general_purpose::STANDARD.encode(format!("{}:{}", wp_user, wp_app_pwd));
 
     let body = serde_json::json!({
         "title": title,
         "content": content,
         "status": "draft",
-        "format": "standard"
+        "format": "standard",
+        "content_filtered": content,
     });
 
     let res = client

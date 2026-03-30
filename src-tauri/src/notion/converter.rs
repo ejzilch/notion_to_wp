@@ -173,6 +173,7 @@ async fn convert_block_to_html(
 
         "bulleted_list_item" | "numbered_list_item" => {
                 let content = extract_rich_text(&block, block_type);
+                let content = content.replace('\n', "<br>");
                 let mut nested = String::new();
 
                 if block["has_children"].as_bool() == Some(true) {

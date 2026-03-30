@@ -27,6 +27,7 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
     const [customCss, setCustomCss] = useState("");
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [deletedBlocks, setDeletedBlocks] = useState<Set<string>>(new Set());
+    const prevDefaultStyleConfig = useRef(defaultStyleConfig);
 
     useEffect(() => {
         loadCustomCss().then(setCustomCss);
@@ -42,6 +43,19 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
         setOverrides({});
         setDeletedBlocks(new Set());
     }, [html]);
+
+    useEffect(() => {
+        const defaultChanged =
+            JSON.stringify(prevDefaultStyleConfig.current) !==
+            JSON.stringify(defaultStyleConfig);
+
+        prevDefaultStyleConfig.current = defaultStyleConfig;
+
+        if (defaultChanged) {
+            // 只更新 styleConfig，不清空 overrides（保留使用者的 per-block 編輯）
+            setStyleConfig(defaultStyleConfig);
+        }
+    }, [defaultStyleConfig]);
 
     // 接收 iframe 點擊事件
     useEffect(() => {
@@ -150,7 +164,7 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
                 buildWpHtml(html, styleConfig, overrides),
                 deletedBlocks
             );
-            console.log("=== WP HTML ===", finalHtml);
+
             const link = await invoke<string>("post_to_wp", {
                 title,
                 content: finalHtml,
