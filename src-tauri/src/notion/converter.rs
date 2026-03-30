@@ -183,15 +183,18 @@ async fn convert_block_to_html(
                     )
                     .await
                     {
+                        let (list_tag, list_attrs) = if block_type == "numbered_list_item" {
+                            ("ol", r#"<!-- wp:list {"ordered":true} -->"#)
+                        } else {
+                            ("ul", "<!-- wp:list -->")
+                        };
+
                         nested = format!(
-                            "\n<!-- wp:list -->\n<ul class=\"wp-block-list\">{}</ul>\n<!-- /wp:list -->\n",
-                            blocks_to_wp_html(
-                                Arc::clone(&client),
-                                &children,
-                                &token,
-                                Arc::clone(&cache)
-                            )
-                            .await
+                            "\n{}\n<{} class=\"wp-block-list\">\n{}\n</{}>\n<!-- /wp:list -->",
+                            list_attrs,
+                            list_tag,
+                            blocks_to_wp_html(Arc::clone(&client), &children, &token, Arc::clone(&cache)).await,
+                            list_tag,
                         );
                     }
                 }

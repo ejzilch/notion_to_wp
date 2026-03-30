@@ -96,49 +96,49 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
 
     const clickScript = `
     <script>
-      document.addEventListener('click', function(e) {
-        const el = e.target.closest('[data-block-index]');
-        if (!el) return;
-        // 移除之前的 highlight
-        document.querySelectorAll('.--block-selected').forEach(function(n) {
-          n.classList.remove('--block-selected');
+        document.addEventListener('click', function(e) {
+            const el = e.target.closest('[data-block-index]');
+            if (!el) return;
+            // 移除之前的 highlight
+            document.querySelectorAll('.--block-selected').forEach(function(n) {
+            n.classList.remove('--block-selected');
+            });
+            el.classList.add('--block-selected');
+            window.parent.postMessage({
+            type: 'block-click',
+            blockIndex: parseInt(el.dataset.blockIndex),
+            blockType: el.dataset.blockType,
+            }, '*');
         });
-        el.classList.add('--block-selected');
-        window.parent.postMessage({
-          type: 'block-click',
-          blockIndex: parseInt(el.dataset.blockIndex),
-          blockType: el.dataset.blockType,
-        }, '*');
-      });
-    </script>
-    <style>
-      [data-block-index] { cursor: pointer; transition: outline 0.15s; }
-      [data-block-index]:hover { outline: 2px dashed #6366f1; outline-offset: 3px; }
-      .--block-selected { outline: 2px solid #6366f1 !important; outline-offset: 3px; }
-    </style>
-  `;
+        </script>
+        <style>
+        [data-block-index] { cursor: pointer; transition: outline 0.15s; }
+        [data-block-index]:hover { outline: 2px dashed #6366f1; outline-offset: 3px; }
+        .--block-selected { outline: 2px solid #6366f1 !important; outline-offset: 3px; }
+        </style>
+    `;
 
     const previewDoc = `<!DOCTYPE html><html><head>
-    <style>
-      * { box-sizing: border-box; }
-      body { font-family: sans-serif; padding: 2.5rem 3rem; color: #111;
-        line-height: 1.7; max-width: 860px; margin: 0 auto; }
-      h1,h2,h3,h4 { font-weight: 600; line-height: 1.3; }
-      img { max-width: 100%; border-radius: 6px; }
-      pre { background: #f4f4f4; padding: 1.2rem; border-radius: 6px;
-        overflow-x: auto; font-size: 0.875rem; }
-      blockquote { border-left: 4px solid #ddd; margin: 0;
-        padding: 0.5rem 1rem; color: #555; }
-      table { border-collapse: collapse; width: 100%; }
-      td, th { border: 1px solid #ddd; padding: 8px 14px; }
-      th { background: #f8f8f8; font-weight: 600; }
-      ul, ol { padding-left: 1.5rem; }
-      hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5rem 0; }
-    </style>
-    ${buildStyleTag(styleConfig)}
-    ${customCss ? `<style>/* 自訂 CSS */\n${customCss}</style>` : ""}
-    ${clickScript}
-  </head><body>${previewHtml}</body></html>`;
+        <style>
+        * { box-sizing: border-box; }
+        body { font-family: sans-serif; padding: 2.5rem 3rem; color: #111;
+            line-height: 1.7; max-width: 860px; margin: 0 auto; }
+        h1,h2,h3,h4 { font-weight: 600; line-height: 1.3; }
+        img { max-width: 100%; border-radius: 6px; }
+        pre { background: #f4f4f4; padding: 1.2rem; border-radius: 6px;
+            overflow-x: auto; font-size: 0.875rem; }
+        blockquote { border-left: 4px solid #ddd; margin: 0;
+            padding: 0.5rem 1rem; color: #555; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { border: 1px solid #ddd; padding: 8px 14px; }
+        th { background: #f8f8f8; font-weight: 600; }
+        ul, ol { padding-left: 1.5rem; }
+        hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5rem 0; }
+        </style>
+        ${buildStyleTag(styleConfig)}
+        ${customCss ? `<style>/* 自訂 CSS */\n${customCss}</style>` : ""}
+        ${clickScript}
+    </head><body>${previewHtml}</body></html>`;
 
     async function handlePost() {
         setPosting(true);
@@ -150,7 +150,7 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
                 buildWpHtml(html, styleConfig, overrides),
                 deletedBlocks
             );
-
+            console.log("=== WP HTML ===", finalHtml);
             const link = await invoke<string>("post_to_wp", {
                 title,
                 content: finalHtml,

@@ -26,13 +26,13 @@ const BLOCK_CONFIG: Partial<Record<BlockType, BlockRenderConfig>> = {
     bulleted_list_item: {
         wpTag: "wp:list-item",
         htmlTag: "li",
-        styleTarget: "li",
+        styleTarget: "ul.wp-block-list > li",
         skipCommentStyle: false,
     },
     numbered_list_item: {
         wpTag: "wp:list-item",
         htmlTag: "li",
-        styleTarget: "li",
+        styleTarget: "ol.wp-block-list > li",
         skipCommentStyle: false,
     },
     divider: {
@@ -143,118 +143,99 @@ function buildTag(
 /* ============================= */
 /* HTML Processing */
 /* ============================= */
-
 export function buildFinalHtml(
     html: string,
     config: StyleConfig,
     overrides: BlockOverrideMap = {}
 ): string {
-    let result = html;
+    // Step 1: 用 DOMParser 標記每個 <li> 的真實 block type
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
 
-    const processedTags = new Set<string>();
-    const tagCounters: Record<string, number> = {};
+    // 標記 ul > li 為 bulleted_list_item，ol > li 為 numbered_list_item
+    const typeCounters: Record<string, number> = {};
 
+    doc.querySelectorAll("ul > li").forEach((li) => {
+        const bt = "bulleted_list_item";
+        const idx = typeCounters[bt] ?? 0;
+        typeCounters[bt] = idx + 1;
+        li.setAttribute("data-block-type", bt);
+        li.setAttribute("data-block-index", String(idx));
+    });
+
+    doc.querySelectorAll("ol > li").forEach((li) => {
+        const bt = "numbered_list_item";
+        const idx = typeCounters[bt] ?? 0;
+        typeCounters[bt] = idx + 1;
+        li.setAttribute("data-block-type", bt);
+        li.setAttribute("data-block-index", String(idx));
+    });
+
+    // Step 2: 對其他非 li 的 tag，維持原本 regex 邏輯
+    // (heading, p, blockquote, etc. — 這些沒有衝突)
+    const NON_LIST_TYPES: BlockType[] = [
+        "heading_1", "heading_2", "heading_3", "heading_4",
+        "paragraph", "quote", "code", "table", "callout", "divider",
+    ];
+
+    for (const blockType of NON_LIST_TYPES) {
+        const baseStyle = config[blockType];
+        if (!baseStyle) continue;
+        const tag = TAG_MAP[blockType];
+        if (!tag) continue;
+
+        const elements = doc.querySelectorAll(tag);
+        let idx = 0;
+        elements.forEach((el) => {
+            el.setAttribute("data-block-type", blockType);
+            el.setAttribute("data-block-index", String(idx++));
+        });
+    }
+
+    // Step 3: 套用樣式
     for (const [blockType, baseStyle] of Object.entries(config) as [BlockType, BlockStyle][]) {
         const tag = TAG_MAP[blockType];
         if (!tag) continue;
 
-        if (processedTags.has(tag)) continue;
-        processedTags.add(tag);
+        const elements = doc.querySelectorAll(
+            `[data-block-type="${blockType}"]`
+        );
 
-        const relatedTypes = (Object.entries(TAG_MAP) as [BlockType, string][])
-            .filter(([, t]) => t === tag)
-            .map(([bt]) => bt);
-
-        const regex = new RegExp(`<${tag}((?:\\s[^>]*)?)>`, "g");
-
-        result = result.replace(regex, (match, attrStr) => {
-            const idx = tagCounters[tag] ?? 0;
-            tagCounters[tag] = idx + 1;
-
-            const existingTypeMatch = attrStr.match(/data-block-type="([^"]*)"/);
-
-            const currentBlockType: BlockType = existingTypeMatch
-                ? (existingTypeMatch[1] as BlockType)
-                : relatedTypes[0];
-
-            const base = config[currentBlockType] ?? baseStyle;
-
+        elements.forEach((el) => {
+            const idx = parseInt(el.getAttribute("data-block-index") ?? "0");
             const override = Object.values(overrides).find(
-                (o) => o.blockType === currentBlockType && o.blockIndex === idx
+                (o) => o.blockType === blockType && o.blockIndex === idx
             );
+            const style = mergeStyle(baseStyle, override?.style);
 
-            const style = mergeStyle(base, override?.style);
-
-            const hasAny =
-                style.color || style.background || style.fontSize || style.fontWeight || style.cssClass;
-
-            const cleanAttrs = attrStr
-                .replace(/\s*data-block-index="\d+"/g, "")
-                .replace(/\s*data-block-type="[^"]*"/g, "")
-                .trim();
-
-            const classMatch = cleanAttrs.match(/class="([^"]*)"/);
-            const existingClass = classMatch ? classMatch[1] : "";
-
-            const styleMatch = cleanAttrs.match(/style="([^"]*)"/);
-            const existingStyle = styleMatch ? styleMatch[1].replace(/;+$/, "") : "";
-
-            const otherAttrs = cleanAttrs
-                .replace(/\s*class="[^"]*"/, "")
-                .replace(/\s*style="[^"]*"/, "")
-                .trim();
-
-            const dataAttrs = `data-block-index="${idx}" data-block-type="${currentBlockType}"`;
-
-            if (!hasAny) {
-                return buildTag(tag, existingClass, existingStyle, dataAttrs, otherAttrs);
-            }
+            const hasAny = style.color || style.background || style.fontSize || style.fontWeight || style.cssClass;
+            if (!hasAny) return;
 
             const extraClasses = mergeClasses(
                 wpColorClasses(style.color, style.background),
                 style.cssClass ?? ""
             );
-
-            const newClass = mergeClasses(existingClass, extraClasses);
-
-            const inlineParts: string[] = [];
-            if (style.color) inlineParts.push(`color:${style.color}`);
-            if (style.background) inlineParts.push(`background-color:${style.background}`);
-            if (style.fontSize) inlineParts.push(`font-size:${style.fontSize}`);
-            if (style.fontWeight) inlineParts.push(`font-weight:${style.fontWeight}`);
-
-            const newStyleProps = new Map<string, string>();
-
-            if (existingStyle) {
-                for (const decl of existingStyle.split(";").map((s: string) => s.trim()).filter(Boolean)) {
-                    const [prop] = decl.split(":").map((s: string) => s.trim());
-                    newStyleProps.set(prop, decl);
-                }
+            if (extraClasses) {
+                el.className = mergeClasses(el.className, extraClasses);
             }
 
-            for (const decl of inlineParts) {
-                const [prop] = decl.split(":").map(s => s.trim());
-                newStyleProps.set(prop, decl);
+            const inlineStyle: string[] = [];
+            if (style.color) inlineStyle.push(`color:${style.color}`);
+            if (style.background) inlineStyle.push(`background-color:${style.background}`);
+            if (style.fontSize) inlineStyle.push(`font-size:${style.fontSize}`);
+            if (style.fontWeight) inlineStyle.push(`font-weight:${style.fontWeight}`);
+
+            if (inlineStyle.length) {
+                const existing = el.getAttribute("style") ?? "";
+                const merged = existing
+                    ? `${existing.replace(/;+$/, "")};${inlineStyle.join(";")}`
+                    : inlineStyle.join(";");
+                el.setAttribute("style", merged);
             }
-
-            const newStyle = Array.from(newStyleProps.values()).join(";");
-
-            return buildTag(tag, newClass, newStyle, dataAttrs, otherAttrs);
         });
-
-        // 🔥 修正：list 不寫 comment
-        const block = BLOCK_CONFIG[blockType];
-        if (!block || block.skipCommentStyle) continue;
-
-        const needs =
-            baseStyle.color || baseStyle.background || baseStyle.fontSize;
-
-        if (needs) {
-            result = updateBlockComment(result, blockType, baseStyle);
-        }
     }
 
-    return result;
+    return doc.querySelector("div")!.innerHTML;
 }
 
 /* ============================= */
@@ -268,21 +249,42 @@ export function buildWpHtml(
 ): string {
     const withData = buildFinalHtml(html, config, overrides);
 
-    return withData
+    let result = withData
         .replace(/\s*data-block-index="\d+"/g, "")
         .replace(/\s*data-block-type="[^"]*"/g, "")
         .replace(/\s+>/g, ">")
         .replace(/(<\w+)\s{2,}/g, "$1 ");
+
+    for (const [blockType, baseStyle] of Object.entries(config) as [BlockType, BlockStyle][]) {
+        const block = BLOCK_CONFIG[blockType];
+        if (!block || block.skipCommentStyle) continue;
+
+        // 找出這個 blockType 所有的 overrides
+        const blockOverrides = Object.values(overrides).filter(
+            (o) => o.blockType === blockType
+        );
+
+        // 只要全域樣式或任一 override 有值就執行
+        const globalNeeds = baseStyle.color || baseStyle.background ||
+            baseStyle.fontSize || baseStyle.fontWeight;
+        const overrideNeeds = blockOverrides.length > 0;
+
+        if (!globalNeeds && !overrideNeeds) continue;
+
+        result = updateBlockComment(result, blockType, baseStyle, overrides);
+    }
+
+    return result;
 }
 
 /* ============================= */
 /* WP Comment */
 /* ============================= */
-
 function updateBlockComment(
     html: string,
     blockType: BlockType,
-    style: BlockStyle
+    style: BlockStyle,
+    overrides?: BlockOverrideMap
 ): string {
     const block = BLOCK_CONFIG[blockType];
     if (!block) return html;
@@ -295,40 +297,72 @@ function updateBlockComment(
         heading_3: 3,
         heading_4: 4,
     };
-
     const level = levelMap[blockType];
+
+    const isListItem =
+        blockType === "bulleted_list_item" || blockType === "numbered_list_item";
 
     const regex = new RegExp(
         `<!-- ${wpTag}(\\s+(\\{[\\s\\S]*?\\}))?(\\s*)-->`,
         "g"
     );
 
-    return html.replace(regex, (match, _withJson, jsonPart) => {
+    const counter = { count: 0 };
+
+    return html.replace(regex, (match, _withJson, jsonPart, _ws, offset: number) => {
         let attrs: Record<string, any> = {};
-
         if (jsonPart?.trim()) {
-            try {
-                attrs = JSON.parse(jsonPart.trim());
-            } catch {
-                return match;
-            }
+            try { attrs = JSON.parse(jsonPart.trim()); } catch { return match; }
         }
 
-        if (level !== undefined && attrs.level !== level) {
-            return match;
+        // heading level 不符跳過
+        if (level !== undefined) {
+            if (attrs.level !== undefined && attrs.level !== level) return match;
         }
 
-        if (style.color || style.background) {
+        // list-item 判斷父層
+        if (isListItem) {
+            const before = html.slice(0, offset);
+            const lastUl = before.lastIndexOf("<ul");
+            const lastOl = before.lastIndexOf("<ol");
+            const isOrdered = lastOl > lastUl;
+            const expectedType: BlockType = isOrdered
+                ? "numbered_list_item"
+                : "bulleted_list_item";
+            if (expectedType !== blockType) return match;
+        }
+
+        const idx = counter.count++;
+
+        // ★ 核心修正：合併 override
+        const override = overrides
+            ? Object.values(overrides).find(
+                (o) => o.blockType === blockType && o.blockIndex === idx
+            )
+            : undefined;
+
+        const finalStyle = mergeStyle(style, override?.style);
+
+        // 沒有任何樣式就跳過，保留原本的 comment
+        const hasAny = finalStyle.color || finalStyle.background ||
+            finalStyle.fontSize || finalStyle.fontWeight;
+        if (!hasAny) return match;
+
+        if (finalStyle.color || finalStyle.background) {
             attrs.style = attrs.style || {};
             attrs.style.color = attrs.style.color || {};
-            if (style.color) attrs.style.color.text = style.color;
-            if (style.background) attrs.style.color.background = style.background;
+            if (finalStyle.color) attrs.style.color.text = finalStyle.color;
+            if (finalStyle.background) attrs.style.color.background = finalStyle.background;
         }
-
-        if (style.fontSize) {
+        if (finalStyle.fontSize) {
             attrs.style = attrs.style || {};
             attrs.style.typography = attrs.style.typography || {};
-            attrs.style.typography.fontSize = style.fontSize;
+            attrs.style.typography.fontSize = finalStyle.fontSize;
+        }
+        if (finalStyle.fontWeight) {
+            attrs.style = attrs.style || {};
+            attrs.style.typography = attrs.style.typography || {};
+            attrs.style.typography.fontWeight = finalStyle.fontWeight;
         }
 
         const jsonStr = JSON.stringify(attrs);
