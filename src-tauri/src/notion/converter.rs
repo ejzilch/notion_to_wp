@@ -328,6 +328,38 @@ async fn convert_block_to_html(
                 .await
         }
 
+        "toggle" => {
+            let summary = extract_rich_text(&block, "toggle");
+            let mut inner_content = String::new();
+
+            if block["has_children"].as_bool() == Some(true) {
+                if let Ok(children) = fetch_all_blocks(
+                    &client,
+                    block["id"].as_str().unwrap_or(""),
+                    &token,
+                )
+                .await
+                {
+                    inner_content = blocks_to_wp_html(
+                        Arc::clone(&client),
+                        &children,
+                        &token,
+                        Arc::clone(&cache),
+                    )
+                    .await;
+                }
+            }
+
+            format!(
+                "\n<!-- wp:details -->\n\
+                <details class=\"wp-block-details\">\
+                <summary>{summary}</summary>\
+                {inner_content}\
+                </details>\n\
+                <!-- /wp:details -->\n"
+            )
+        }
+
         _ => String::new(),
     }
 }
