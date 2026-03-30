@@ -166,8 +166,9 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
             * { box-sizing: border-box; }
             body { font-family: sans-serif; padding: 2.5rem 3rem; color: #111;
                 line-height: 1.7; max-width: 860px; margin: 0 auto; }
-            h1,h2,h3,h4 { font-weight: 600; line-height: 1.3; }
+            h1,h2,h3,h4 { line-height: 1.3; font-weight: normal; }
             img { max-width: 100%; border-radius: 6px; }
+            a { color: inherit; text-decoration: underline; }
             pre { background: #f4f4f4; padding: 1.2rem; border-radius: 6px;
                 overflow-x: auto; font-size: 0.875rem; }
             blockquote { border-left: 4px solid #ddd; margin: 0;
@@ -183,6 +184,10 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
             <style>
             [data-block-index] { cursor: pointer; transition: outline 0.15s; }
             [data-block-index]:hover { outline: 2px dashed #6366f1; outline-offset: 3px; }
+            details.wp-block-details {}
+            details.wp-block-details summary {}
+            details.wp-block-details summary:hover {}
+            details.wp-block-details[open] summary {}
             .--block-selected { outline: 2px solid #6366f1 !important; outline-offset: 3px; }
             </style>
             <script>

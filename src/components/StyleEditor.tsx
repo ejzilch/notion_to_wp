@@ -34,6 +34,7 @@ export default function StyleEditor({ config, onChange }: Props) {
     }
 
     function hasStyle(type: BlockType) {
+        if (!config[type]) return false;
         return Object.values(config[type]).some((v) => v !== "");
     }
 

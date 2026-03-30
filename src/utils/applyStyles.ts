@@ -40,6 +40,18 @@ const BLOCK_CONFIG: Partial<Record<BlockType, BlockRenderConfig>> = {
         htmlTag: "hr",
         styleTarget: "hr",
     },
+    link: {
+        wpTag: "wp:paragraph",
+        htmlTag: "a",
+        styleTarget: "a",
+        skipCommentStyle: true,
+    },
+    toggle: {
+        wpTag: "wp:details",
+        htmlTag: "details",
+        styleTarget: "details.wp-block-details",
+        skipCommentStyle: false,
+    },
 };
 
 /**
@@ -57,6 +69,8 @@ const TAG_MAP: Partial<Record<BlockType, string>> = {
     callout: "div",
     bulleted_list_item: "li",
     numbered_list_item: "li",
+    link: "a",
+    toggle: "details",
 };
 
 /* ============================= */
@@ -167,7 +181,7 @@ export function buildFinalHtml(
     // (heading, p, blockquote, etc. — 這些沒有衝突)
     const NON_LIST_TYPES: BlockType[] = [
         "heading_1", "heading_2", "heading_3", "heading_4",
-        "paragraph", "quote", "code", "table", "callout", "divider",
+        "paragraph", "quote", "code", "table", "callout", "divider", "link", "toggle",
     ];
 
     for (const blockType of NON_LIST_TYPES) {
