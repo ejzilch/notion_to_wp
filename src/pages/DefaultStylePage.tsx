@@ -3,7 +3,11 @@ import { StyleConfig, buildDefaultStyleConfig } from "../types/style";
 import { saveDefaultStyleConfig, loadDefaultStyleConfig } from "../store/defaultStyleStore";
 import StyleEditor from "../components/StyleEditor";
 
-export default function DefaultStylePage() {
+interface Props {
+    onSave?: (config: StyleConfig) => void;
+}
+
+export default function DefaultStylePage({ onSave }: Props) {
     const [config, setConfig] = useState<StyleConfig>(buildDefaultStyleConfig());
     const [saved, setSaved] = useState(false);
 
@@ -13,8 +17,7 @@ export default function DefaultStylePage() {
 
     async function handleSave() {
         await saveDefaultStyleConfig(config);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        onSave?.(config);
     }
 
     async function handleReset() {

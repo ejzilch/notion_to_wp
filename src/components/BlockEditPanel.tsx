@@ -170,6 +170,23 @@ export default function BlockEditPanel({
                     </select>
                 </div>
 
+                {/* 底線 */}
+                <div className="flex items-center gap-2">
+                    <label className="text-xs text-zinc-400 shrink-0 w-16">底線</label>
+                    <select
+                        value={style.textDecoration ?? ""}
+                        onChange={(e) => update("textDecoration", e.target.value)}
+                        className="flex-1 min-w-0 px-2 py-1.5 text-xs rounded bg-zinc-700
+                            border border-zinc-600 text-white focus:outline-none
+                            focus:border-indigo-500"
+                    >
+                        <option value="">（預設）</option>
+                        <option value="underline">底線</option>
+                        <option value="none">移除底線</option>
+                        <option value="line-through">刪除線</option>
+                    </select>
+                </div>
+
                 {/* CSS Class */}
                 <div className="flex items-center gap-2">
                     <label className="text-xs text-zinc-400 shrink-0 w-16">CSS Class</label>

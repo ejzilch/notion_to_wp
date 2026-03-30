@@ -78,6 +78,7 @@ export function buildStyleTag(config: StyleConfig): string {
         if (style.background) declarations.push(`background-color: ${style.background}`);
         if (style.fontSize) declarations.push(`font-size: ${style.fontSize}`);
         if (style.fontWeight) declarations.push(`font-weight: ${style.fontWeight}`);
+        if (style.textDecoration) declarations.push(`text-decoration: ${style.textDecoration}`);
 
         if (declarations.length > 0) {
             rules.push(`${selector} { ${declarations.join("; ")}; }`);
@@ -116,28 +117,19 @@ function wpColorClasses(color?: string, bg?: string): string {
 function mergeStyle(base: BlockStyle, override?: Partial<BlockStyle>): BlockStyle {
     if (!override) return base;
     return {
-        color: override.color ?? base.color,
-        fontWeight: override.fontWeight ?? base.fontWeight,
-        fontSize: override.fontSize ?? base.fontSize,
-        background: override.background ?? base.background,
-        cssClass: override.cssClass ?? base.cssClass,
+        color: (override.color !== undefined && override.color !== "")
+            ? override.color : base.color,
+        fontWeight: (override.fontWeight !== undefined && override.fontWeight !== "")
+            ? override.fontWeight : base.fontWeight,
+        fontSize: (override.fontSize !== undefined && override.fontSize !== "")
+            ? override.fontSize : base.fontSize,
+        background: (override.background !== undefined && override.background !== "")
+            ? override.background : base.background,
+        textDecoration: (override.textDecoration !== undefined && override.textDecoration !== "")
+            ? override.textDecoration : base.textDecoration,  // ← 新增
+        cssClass: (override.cssClass !== undefined && override.cssClass !== "")
+            ? override.cssClass : base.cssClass,
     };
-}
-
-function buildTag(
-    tag: string,
-    newClass: string,
-    newStyle: string,
-    dataAttrs: string,
-    otherAttrs: string
-): string {
-    const parts: string[] = [tag];
-    if (newClass) parts.push(`class="${newClass}"`);
-    if (newStyle) parts.push(`style="${newStyle}"`);
-    if (dataAttrs) parts.push(dataAttrs);
-    if (otherAttrs) parts.push(otherAttrs);
-
-    return `<${parts.join(" ")}>`;
 }
 
 /* ============================= */
@@ -179,6 +171,7 @@ export function buildFinalHtml(
     ];
 
     for (const blockType of NON_LIST_TYPES) {
+
         const baseStyle = config[blockType];
         if (!baseStyle) continue;
         const tag = TAG_MAP[blockType];
@@ -187,6 +180,7 @@ export function buildFinalHtml(
         const elements = doc.querySelectorAll(tag);
         let idx = 0;
         elements.forEach((el) => {
+
             el.setAttribute("data-block-type", blockType);
             el.setAttribute("data-block-index", String(idx++));
         });
@@ -208,7 +202,7 @@ export function buildFinalHtml(
             );
             const style = mergeStyle(baseStyle, override?.style);
 
-            const hasAny = style.color || style.background || style.fontSize || style.fontWeight || style.cssClass;
+            const hasAny = style.color || style.background || style.fontSize || style.fontWeight || style.cssClass || style.textDecoration;
             if (!hasAny) return;
 
             const extraClasses = mergeClasses(
@@ -224,6 +218,7 @@ export function buildFinalHtml(
             if (style.background) inlineStyle.push(`background-color:${style.background}`);
             if (style.fontSize) inlineStyle.push(`font-size:${style.fontSize}`);
             if (style.fontWeight) inlineStyle.push(`font-weight:${style.fontWeight}`);
+            if (style.textDecoration) inlineStyle.push(`text-decoration:${style.textDecoration}`);
 
             if (inlineStyle.length) {
                 const existing = el.getAttribute("style") ?? "";
@@ -266,7 +261,7 @@ export function buildWpHtml(
 
         // 只要全域樣式或任一 override 有值就執行
         const globalNeeds = baseStyle.color || baseStyle.background ||
-            baseStyle.fontSize || baseStyle.fontWeight;
+            baseStyle.fontSize || baseStyle.fontWeight || baseStyle.textDecoration;
         const overrideNeeds = blockOverrides.length > 0;
 
         if (!globalNeeds && !overrideNeeds) continue;
@@ -323,12 +318,14 @@ function updateBlockComment(
         // list-item 判斷父層
         if (isListItem) {
             const before = html.slice(0, offset);
-            const lastUl = before.lastIndexOf("<ul");
-            const lastOl = before.lastIndexOf("<ol");
-            const isOrdered = lastOl > lastUl;
+            const lastWpUl = before.lastIndexOf('<!-- wp:list -->');
+            const lastWpOl = before.lastIndexOf('<!-- wp:list {"ordered":true}');
+            const isOrdered = lastWpOl > lastWpUl;
+
             const expectedType: BlockType = isOrdered
                 ? "numbered_list_item"
                 : "bulleted_list_item";
+
             if (expectedType !== blockType) return match;
         }
 
@@ -365,6 +362,12 @@ function updateBlockComment(
             attrs.style.typography.fontWeight = finalStyle.fontWeight;
         }
 
+        if (finalStyle.textDecoration) {
+            attrs.style = attrs.style || {};
+            attrs.style.typography = attrs.style.typography || {};
+            attrs.style.typography.textDecoration = finalStyle.textDecoration;
+        }
+
         const jsonStr = JSON.stringify(attrs);
         return `<!-- ${wpTag}${jsonStr === "{}" ? "" : ` ${jsonStr}`} -->`;
     });
@@ -382,7 +385,7 @@ export function removeDeletedBlocks(
         const tag = TAG_MAP[blockType];
         if (!tag) continue;
         const pattern = new RegExp(
-            `<${tag}[^>]*data-block-index="${idx}"[^>]*data-block-type="${blockType}"[^>]*>[\\s\\S]*?<\\/${tag}>`,
+            `<${tag}\\b(?=[^>]*data-block-type="${blockType}")(?=[^>]*data-block-index="${idx}")[^>]*>[\\s\\S]*?<\\/${tag}>`,
             "g"
         );
         result = result.replace(pattern, "");

@@ -17,6 +17,7 @@ export interface BlockStyle {
     fontWeight: string;
     fontSize: string;
     background: string;
+    textDecoration: string;
     cssClass: string;
 }
 
@@ -27,6 +28,7 @@ export const DEFAULT_STYLE: BlockStyle = {
     fontWeight: "",
     fontSize: "",
     background: "",
+    textDecoration: "",
     cssClass: "",
 };
 

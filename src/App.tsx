@@ -43,7 +43,9 @@ export default function App() {
           <main className="flex-1 overflow-hidden">
             {page === "settings" && <SettingsPage />}
             {page === "default-style" && (
-              <DefaultStylePage />
+              <DefaultStylePage
+                onSave={(config) => setDefaultStyleConfig(config)}
+              />
             )}
             {page === "task" && (
               <TaskPage
