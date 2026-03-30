@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { loadSettings } from "../store/settingsStore";
 import StyleEditor from "../components/StyleEditor";
 import BlockEditPanel from "../components/BlockEditPanel";
 import { StyleConfig, BlockType, BlockStyle, BlockOverrideMap } from "../types/style";
-import { buildStyleTag, buildFinalHtml, buildWpHtml, removeDeletedBlocks } from "../utils/applyStyles";
+import { buildStyleContent, buildFinalHtml, buildWpHtml, removeDeletedBlocks } from "../utils/applyStyles";
 import { loadCustomCss } from "../store/customCssStore";
 
 interface Props {
@@ -25,9 +25,10 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
     const [posting, setPosting] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [customCss, setCustomCss] = useState("");
-    const iframeRef = useRef<HTMLIFrameElement>(null);
     const [deletedBlocks, setDeletedBlocks] = useState<Set<string>>(new Set());
     const prevDefaultStyleConfig = useRef(defaultStyleConfig);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [iframeReady, setIframeReady] = useState(false);
 
     useEffect(() => {
         loadCustomCss().then(setCustomCss);
@@ -37,8 +38,38 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
         setStyleConfig(defaultStyleConfig);
     }, [defaultStyleConfig]);
 
-    // html 變動時（新任務），重新載入預設樣式
+    // 接收 iframe 訊息
     useEffect(() => {
+        function handleMessage(e: MessageEvent) {
+            if (e.data?.type === "block-click") {
+                setSelectedBlock({
+                    blockIndex: e.data.blockIndex,
+                    blockType: e.data.blockType as BlockType,
+                });
+            }
+            if (e.data?.type === "iframe-ready") {
+                setIframeReady(true);
+            }
+        }
+        window.addEventListener("message", handleMessage);
+        return () => window.removeEventListener("message", handleMessage);
+    }, []);
+
+    // iframe ready 後推送初始樣式
+    useEffect(() => {
+        if (!iframeReady) return;
+        pushStylesToIframe();
+    }, [iframeReady]);
+
+    // 樣式變動時推送，不重載 iframe
+    useEffect(() => {
+        if (!iframeReady) return;
+        pushStylesToIframe();
+    }, [styleConfig, overrides, deletedBlocks, customCss]);
+
+    // html 變動時重置 iframe
+    useEffect(() => {
+        setIframeReady(false);
         setStyleConfig(defaultStyleConfig);
         setOverrides({});
         setDeletedBlocks(new Set());
@@ -101,13 +132,6 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
         loadCustomCss().then(setCustomCss);
     }, []);
 
-    // 預覽 HTML：帶 data-* 屬性 + 點擊 script
-    const filteredHtml = removeDeletedBlocks(
-        buildFinalHtml(html, styleConfig, overrides),
-        deletedBlocks
-    );
-    const previewHtml = filteredHtml;
-
     const clickScript = `
     <script>
         document.addEventListener('click', function(e) {
@@ -132,27 +156,76 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
         </style>
     `;
 
-    const previewDoc = `<!DOCTYPE html><html><head>
-        <style>
-        * { box-sizing: border-box; }
-        body { font-family: sans-serif; padding: 2.5rem 3rem; color: #111;
-            line-height: 1.7; max-width: 860px; margin: 0 auto; }
-        h1,h2,h3,h4 { font-weight: 600; line-height: 1.3; }
-        img { max-width: 100%; border-radius: 6px; }
-        pre { background: #f4f4f4; padding: 1.2rem; border-radius: 6px;
-            overflow-x: auto; font-size: 0.875rem; }
-        blockquote { border-left: 4px solid #ddd; margin: 0;
-            padding: 0.5rem 1rem; color: #555; }
-        table { border-collapse: collapse; width: 100%; }
-        td, th { border: 1px solid #ddd; padding: 8px 14px; }
-        th { background: #f8f8f8; font-weight: 600; }
-        ul, ol { padding-left: 1.5rem; }
-        hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5rem 0; }
-        </style>
-        ${buildStyleTag(styleConfig)}
-        ${customCss ? `<style>/* 自訂 CSS */\n${customCss}</style>` : ""}
-        ${clickScript}
-    </head><body>${previewHtml}</body></html>`;
+    const initialDoc = useMemo(() => {
+        return buildInitialDoc(html, clickScript);
+    }, [html]);
+
+    function buildInitialDoc(html: string, clickScript: string): string {
+        return `<!DOCTYPE html><html><head>
+            <style id="__base__">
+            * { box-sizing: border-box; }
+            body { font-family: sans-serif; padding: 2.5rem 3rem; color: #111;
+                line-height: 1.7; max-width: 860px; margin: 0 auto; }
+            h1,h2,h3,h4 { font-weight: 600; line-height: 1.3; }
+            img { max-width: 100%; border-radius: 6px; }
+            pre { background: #f4f4f4; padding: 1.2rem; border-radius: 6px;
+                overflow-x: auto; font-size: 0.875rem; }
+            blockquote { border-left: 4px solid #ddd; margin: 0;
+                padding: 0.5rem 1rem; color: #555; }
+            table { border-collapse: collapse; width: 100%; }
+            td, th { border: 1px solid #ddd; padding: 8px 14px; }
+            th { background: #f8f8f8; font-weight: 600; }
+            ul, ol { padding-left: 1.5rem; }
+            hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5rem 0; }
+            </style>
+            <style id="__custom-styles__"></style>
+            <style id="__custom-css__"></style>
+            <style>
+            [data-block-index] { cursor: pointer; transition: outline 0.15s; }
+            [data-block-index]:hover { outline: 2px dashed #6366f1; outline-offset: 3px; }
+            .--block-selected { outline: 2px solid #6366f1 !important; outline-offset: 3px; }
+            </style>
+            <script>
+            window.addEventListener('load', function() {
+                window.parent.postMessage({ type: 'iframe-ready' }, '*');
+            });
+
+            window.addEventListener('message', function(e) {
+                if (!e.data || e.data.type !== 'update-styles') return;
+
+                // 直接設定 textContent，不用 regex
+                var styleEl = document.getElementById('__custom-styles__');
+                if (styleEl) styleEl.textContent = e.data.styleTag || '';
+
+                var cssEl = document.getElementById('__custom-css__');
+                if (cssEl) cssEl.textContent = e.data.customCss || '';
+
+                var scrollY = window.scrollY;
+                document.body.innerHTML = e.data.html;
+                window.scrollTo(0, scrollY);
+                bindBlockClick();
+            });
+
+            function bindBlockClick() {
+                document.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-block-index]');
+                if (!el) return;
+                document.querySelectorAll('.--block-selected').forEach(function(n) {
+                    n.classList.remove('--block-selected');
+                });
+                el.classList.add('--block-selected');
+                window.parent.postMessage({
+                    type: 'block-click',
+                    blockIndex: parseInt(el.dataset.blockIndex),
+                    blockType: el.dataset.blockType,
+                }, '*');
+                });
+            }
+
+            bindBlockClick();
+            <\/script>
+        </head><body></body></html>`;
+    }
 
     async function handlePost() {
         setPosting(true);
@@ -186,6 +259,25 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
                 尚無預覽內容，請先到任務頁抓取。
             </div>
         );
+    }
+
+    function pushStylesToIframe() {
+        const iframe = iframeRef.current;
+        if (!iframe?.contentWindow) return;
+
+        // 直接傳 CSS 內容，不含 <style> 標籤
+        const styleContent = buildStyleContent(styleConfig);
+        const finalHtml = removeDeletedBlocks(
+            buildFinalHtml(html, styleConfig, overrides),
+            deletedBlocks
+        );
+
+        iframe.contentWindow.postMessage({
+            type: "update-styles",
+            styleTag: styleContent,   // ← 純 CSS 字串，不含 <style> 標籤
+            customCss,
+            html: finalHtml,
+        }, "*");
     }
 
     return (
@@ -237,7 +329,7 @@ export default function PreviewPage({ html, title, defaultStyleConfig }: Props) 
                 <div className="flex-1 overflow-hidden bg-white relative">
                     <iframe
                         ref={iframeRef}
-                        srcDoc={previewDoc}
+                        srcDoc={initialDoc}
                         className="w-full h-full"
                         sandbox="allow-same-origin allow-scripts"
                         title="預覽"

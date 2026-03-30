@@ -392,3 +392,27 @@ export function removeDeletedBlocks(
     }
     return result;
 }
+
+export function buildStyleContent(config: StyleConfig): string {
+    const rules: string[] = [];
+
+    for (const [blockType, style] of Object.entries(config) as [BlockType, BlockStyle][]) {
+        const block = BLOCK_CONFIG[blockType];
+        if (!block) continue;
+        const selector = block.styleTarget;
+        if (!selector) continue;
+
+        const declarations: string[] = [];
+        if (style.color) declarations.push(`color: ${style.color}`);
+        if (style.background) declarations.push(`background-color: ${style.background}`);
+        if (style.fontSize) declarations.push(`font-size: ${style.fontSize}`);
+        if (style.fontWeight) declarations.push(`font-weight: ${style.fontWeight}`);
+        if (style.textDecoration) declarations.push(`text-decoration: ${style.textDecoration}`);
+
+        if (declarations.length > 0) {
+            rules.push(`${selector} { ${declarations.join("; ")}; }`);
+        }
+    }
+
+    return rules.join("\n");
+}
