@@ -61,4 +61,12 @@ jobs:
           releaseBody: ""
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: false
           args: --target ${{ matrix.target }}
+        if: startsWith(github.ref, 'refs/tags/')
+      
+      - name: Build Tauri app (no release)
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target ${{ matrix.target }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
