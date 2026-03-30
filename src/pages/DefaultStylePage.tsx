@@ -9,7 +9,7 @@ interface Props {
 
 export default function DefaultStylePage({ onSave }: Props) {
     const [config, setConfig] = useState<StyleConfig>(buildDefaultStyleConfig());
-    const [saved, setSaved] = useState(false);
+    const [saved] = useState(false);
 
     useEffect(() => {
         loadDefaultStyleConfig().then(setConfig);
