@@ -18,7 +18,6 @@ pub async fn post_to_wordpress(
         "content": content,
         "status": "draft",
         "format": "standard",
-        "content_filtered": content,
     });
 
     let res = client

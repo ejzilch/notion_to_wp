@@ -1,6 +1,5 @@
 use super::fetcher::fetch_all_blocks;
 use async_recursion::async_recursion;
-use futures::stream::{FuturesUnordered, StreamExt};
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -103,19 +102,20 @@ pub async fn blocks_to_wp_html(
     if let Some(list_type) = current_list_type {
         html_segments.push(flush_list(list_type, &list_buffer));
     }
-
     html_segments.join("\n")
 }
 
 fn flush_list(list_type: &str, items: &[String]) -> String {
-    let items_str = items.join("\n");
+    let items_str = items.concat();
     if list_type == "bulleted_list_item" {
         format!(
-            "\n<!-- wp:list -->\n<ul class=\"wp-block-list\">{items_str}</ul>\n<!-- /wp:list -->\n"
+            "<!-- wp:list -->\n<ul class=\"wp-block-list\">{}</ul><!-- /wp:list -->",
+            items_str
         )
     } else {
         format!(
-            "\n<!-- wp:list {{\"ordered\":true}} -->\n<ol class=\"wp-block-list\">{items_str}</ol>\n<!-- /wp:list -->\n"
+            "<!-- wp:list {{\"ordered\":true}} -->\n<ol class=\"wp-block-list\">{}</ol><!-- /wp:list -->",
+            items_str
         )
     }
 }
@@ -172,43 +172,46 @@ async fn convert_block_to_html(
         }
 
         "bulleted_list_item" | "numbered_list_item" => {
+            let block_id = block["id"].as_str().unwrap_or("").to_string();
+
             let content = extract_rich_text(&block, block_type);
             let content = content.replace('\n', "<br>");
             let mut nested = String::new();
 
             if block["has_children"].as_bool() == Some(true) {
+                {
+                    let lock = cache.lock().await;
+                    if let Some(cached) = lock.get(&block_id) {
+                        return cached.clone();
+                    }
+                }
+
                 if let Ok(children) = fetch_all_blocks(
                     &client,
                     block["id"].as_str().unwrap_or(""),
                     &token,
                 ).await {
-                    let (list_tag, list_attrs) = if block_type == "numbered_list_item" {
-                        ("ol", r#"<!-- wp:list {"ordered":true} -->"#)
-                    } else {
-                        ("ul", "<!-- wp:list -->")
-                    };
-
-                    let inner = blocks_to_list_items(
+                    let raw = blocks_to_wp_html(
                         Arc::clone(&client),
                         &children,
                         &token,
                         Arc::clone(&cache),
                     ).await;
-
-                    nested = format!(
-                        "\n{}\n<{} class=\"wp-block-list\">\n{}\n</{}>\n<!-- /wp:list -->",
-                        list_attrs,
-                        list_tag,
-                        inner,
-                        list_tag,
-                    );
+                    nested = raw.trim().to_string();
                 }
             }
 
-            format!(
-                "\n<!-- wp:list-item -->\n<li>{}{}</li>\n<!-- /wp:list-item -->\n",
+            let result = format!(
+                "<!-- wp:list-item -->\n<li>{}{}</li>\n<!-- /wp:list-item -->\n",
                 content, nested
-            )
+            );
+
+            if !block_id.is_empty() {
+                let mut lock = cache.lock().await;
+                lock.insert(block_id, result.clone());
+            }
+
+            result
         }
 
         "image" => {
@@ -417,6 +420,7 @@ async fn process_synced_block(
     cache: HtmlCache,
 ) -> String {
     let synced_info = &block["synced_block"];
+
     let target_id = if synced_info["synced_from"].is_null() {
         block["id"].as_str().unwrap_or("").to_string()
     } else {
@@ -431,10 +435,11 @@ async fn process_synced_block(
     }
 
     {
-        let lock = cache.lock().await;
+        let mut lock = cache.lock().await;
         if let Some(cached_html) = lock.get(&target_id) {
             return cached_html.clone();
         }
+        lock.insert(target_id.clone(), String::new());
     }
 
     let children = match fetch_all_blocks(&client, &target_id, &token).await {
@@ -443,7 +448,7 @@ async fn process_synced_block(
     };
 
     let final_html =
-        process_multiple_children(Arc::clone(&client), children, &token, Arc::clone(&cache)).await;
+        blocks_to_wp_html(Arc::clone(&client), &children, &token, Arc::clone(&cache)).await;
 
     {
         let mut lock = cache.lock().await;
@@ -451,26 +456,6 @@ async fn process_synced_block(
     }
 
     final_html
-}
-
-// FuturesUnordered 取代 tokio::spawn，不需要 'static
-async fn process_multiple_children(
-    client: Arc<Client>,
-    children: Vec<Value>,
-    token: &str,
-    cache: HtmlCache,
-) -> String {
-    let tasks: FuturesUnordered<_> = children
-        .into_iter()
-        .map(|child| {
-            let t = token.to_string();
-            let c_clone = Arc::clone(&cache);
-            let client_clone = Arc::clone(&client);
-            async move { convert_block_to_html(client_clone, child, t, c_clone).await }
-        })
-        .collect();
-
-    tasks.collect::<Vec<String>>().await.join("\n")
 }
 
 fn process_rich_text_array(rich_texts: &[Value]) -> String {
@@ -512,27 +497,4 @@ fn extract_rich_text(block: &Value, block_type: &str) -> String {
     } else {
         String::new()
     }
-}
-
-#[async_recursion]
-async fn blocks_to_list_items(
-    client: Arc<Client>,
-    blocks: &[Value],
-    token: &str,
-    cache: HtmlCache,
-) -> String {
-    let mut items = Vec::new();
-    for block in blocks {
-        let item = convert_block_to_html(
-            Arc::clone(&client),
-            block.clone(),
-            token.to_string(),
-            Arc::clone(&cache),
-        )
-        .await;
-        if !item.is_empty() {
-            items.push(item);
-        }
-    }
-    items.join("\n")
 }
