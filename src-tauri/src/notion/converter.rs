@@ -175,7 +175,6 @@ async fn convert_block_to_html(
             let block_id = block["id"].as_str().unwrap_or("").to_string();
 
             let content = extract_rich_text(&block, block_type);
-            let content = content.replace('\n', "<br>");
             let mut nested = String::new();
 
             if block["has_children"].as_bool() == Some(true) {
@@ -311,7 +310,7 @@ async fn convert_block_to_html(
                     }
 
                     format!(
-                        "\n\n<figure class=\"wp-block-table\"><table>{}{}</table></figure>\n\n",
+                        "\n<!-- wp:table -->\n<figure class=\"wp-block-table\"><table>{}{}</table></figure>\n<!-- /wp:table -->\n",
                         head_html,
                         format!("<tbody>{}</tbody>", tr_list.concat())
                     )
@@ -463,7 +462,7 @@ fn process_rich_text_array(rich_texts: &[Value]) -> String {
     for rt in rich_texts {
         let plain_text = rt["plain_text"].as_str().unwrap_or("");
         let annotations = &rt["annotations"];
-        let mut formatted = html_escape(plain_text);
+        let mut formatted = html_escape(plain_text).replace('\n', "<br>");
 
         if annotations["bold"].as_bool() == Some(true) {
             formatted = format!("<strong>{}</strong>", formatted);
