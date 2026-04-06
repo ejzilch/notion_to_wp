@@ -1,8 +1,6 @@
 import { StyleConfig, BlockType, BlockStyle, BlockOverrideMap } from "../types/style";
 
-/**
- * ✅ Block → Gutenberg + HTML + Style target
- */
+// Block → Gutenberg + HTML + Style target
 type BlockRenderConfig = {
     wpTag: string;
     htmlTag: string;
@@ -22,7 +20,7 @@ const BLOCK_CONFIG: Partial<Record<BlockType, BlockRenderConfig>> = {
     table: { wpTag: "wp:table", htmlTag: "table", styleTarget: "table" },
     callout: { wpTag: "wp:group", htmlTag: "div", styleTarget: ".wp-block-group" },
 
-    // 🔥 核心：list
+    // 核心：list
     bulleted_list_item: {
         wpTag: "wp:list-item",
         htmlTag: "li",
@@ -54,9 +52,7 @@ const BLOCK_CONFIG: Partial<Record<BlockType, BlockRenderConfig>> = {
     },
 };
 
-/**
- * 🔧 這裡代表「要操作的 HTML tag」
- */
+// 要操作的 HTML tag
 const TAG_MAP: Partial<Record<BlockType, string>> = {
     heading_1: "h1",
     heading_2: "h2",
@@ -73,10 +69,7 @@ const TAG_MAP: Partial<Record<BlockType, string>> = {
     toggle: "details",
 };
 
-/* ============================= */
-/* Style Tag */
-/* ============================= */
-
+// Style Tag
 export function buildStyleTag(config: StyleConfig): string {
     const rules: string[] = [];
 
@@ -102,10 +95,7 @@ export function buildStyleTag(config: StyleConfig): string {
     return rules.length ? `<style>\n${rules.join("\n")}\n</style>` : "";
 }
 
-/* ============================= */
-/* Utils */
-/* ============================= */
-
+// Utils
 function mergeClasses(...groups: string[]): string {
     const seen = new Set<string>();
     const result: string[] = [];
@@ -146,9 +136,7 @@ function mergeStyle(base: BlockStyle, override?: Partial<BlockStyle>): BlockStyl
     };
 }
 
-/* ============================= */
-/* HTML Processing */
-/* ============================= */
+// HTML Processing
 export function buildFinalHtml(
     html: string,
     config: StyleConfig,
@@ -158,7 +146,7 @@ export function buildFinalHtml(
     const tablePlaceholders: string[] = [];
     const htmlWithoutTables = html.replace(
         /(<figure class="wp-block-table">)([\s\S]*?)(<\/figure>)/g,
-        (match, open, inner, close) => {
+        (_match, open, inner, close) => {
             const idx = tablePlaceholders.length;
             const tableStyle = config["table"];
             const inlineStyles: string[] = [];
@@ -275,10 +263,7 @@ export function buildFinalHtml(
     return result;
 }
 
-/* ============================= */
-/* WP HTML */
-/* ============================= */
-
+// WP HTML
 export function buildWpHtml(
     html: string,
     config: StyleConfig,
@@ -314,9 +299,7 @@ export function buildWpHtml(
     return result;
 }
 
-/* ============================= */
-/* WP Comment */
-/* ============================= */
+// WP Comment
 function updateBlockComment(
     html: string,
     blockType: BlockType,
@@ -375,7 +358,7 @@ function updateBlockComment(
 
         const idx = counter.count++;
 
-        // ★ 核心修正：合併 override
+        // 核心修正：合併 override
         const override = overrides
             ? Object.values(overrides).find(
                 (o) => o.blockType === blockType && o.blockIndex === idx
