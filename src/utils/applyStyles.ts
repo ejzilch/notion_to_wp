@@ -66,7 +66,7 @@ const TAG_MAP: Partial<Record<BlockType, string>> = {
     quote: "blockquote",
     code: "pre",
     table: "table",
-    callout: "div",
+    callout: "div.wp-block-group",
     bulleted_list_item: "li",
     numbered_list_item: "li",
     link: "a",
@@ -154,11 +154,35 @@ export function buildFinalHtml(
     config: StyleConfig,
     overrides: BlockOverrideMap = {}
 ): string {
-    // Step 1: 用 DOMParser 標記每個 <li> 的真實 block type
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+    // Step 0: 把所有 table 抽出來，換成 placeholder
+    const tablePlaceholders: string[] = [];
+    const htmlWithoutTables = html.replace(
+        /(<figure class="wp-block-table">)([\s\S]*?)(<\/figure>)/g,
+        (match, open, inner, close) => {
+            const idx = tablePlaceholders.length;
+            const tableStyle = config["table"];
+            const inlineStyles: string[] = [];
+            if (tableStyle?.fontSize) inlineStyles.push(`font-size:${tableStyle.fontSize}`);
+            if (tableStyle?.color) inlineStyles.push(`color:${tableStyle.color}`);
+            if (tableStyle?.background) inlineStyles.push(`background-color:${tableStyle.background}`);
+            if (tableStyle?.fontWeight) inlineStyles.push(`font-weight:${tableStyle.fontWeight}`);
 
-    // 標記 ul > li 為 bulleted_list_item，ol > li 為 numbered_list_item
+            const markedInner = inner.replace(
+                /(<table)(\s[^>]*|)(>)/,
+                (_: string, tag: string, attrs: string, gtClose: string) => {
+                    const styleAttr = inlineStyles.length ? ` style="${inlineStyles.join(";")}"` : "";
+                    return `${tag}${attrs} data-block-type="table" data-block-index="${idx}"${styleAttr}${gtClose}`;
+                }
+            );
+            tablePlaceholders.push(`${open}${markedInner}${close}`);
+            return `<div data-table-placeholder="${idx}"></div>`;
+        }
+    );
+
+    // Step 1: DOMParser 只處理沒有 table 的 html
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${htmlWithoutTables}</div>`, "text/html");
+
     const typeCounters: Record<string, number> = {};
 
     doc.querySelectorAll("ul > li").forEach((li) => {
@@ -177,38 +201,34 @@ export function buildFinalHtml(
         li.setAttribute("data-block-index", String(idx));
     });
 
-    // Step 2: 對其他非 li 的 tag，維持原本 regex 邏輯
-    // (heading, p, blockquote, etc. — 這些沒有衝突)
     const NON_LIST_TYPES: BlockType[] = [
         "heading_1", "heading_2", "heading_3", "heading_4",
-        "paragraph", "quote", "code", "table", "callout", "divider", "link", "toggle",
+        "paragraph", "quote", "code", "callout", "divider", "link", "toggle",
     ];
 
     for (const blockType of NON_LIST_TYPES) {
-
         const baseStyle = config[blockType];
         if (!baseStyle) continue;
         const tag = TAG_MAP[blockType];
         if (!tag) continue;
 
-        const elements = doc.querySelectorAll(tag);
+        const elements = blockType === "callout"
+            ? doc.querySelectorAll("div.wp-block-group")
+            : doc.querySelectorAll(tag);
         let idx = 0;
         elements.forEach((el) => {
-
             el.setAttribute("data-block-type", blockType);
             el.setAttribute("data-block-index", String(idx++));
         });
     }
 
-    // Step 3: 套用樣式
+    // Step 2: 套用樣式
     for (const [blockType, baseStyle] of Object.entries(config) as [BlockType, BlockStyle][]) {
+        if (blockType === "table") continue;
         const tag = TAG_MAP[blockType];
         if (!tag) continue;
 
-        const elements = doc.querySelectorAll(
-            `[data-block-type="${blockType}"]`
-        );
-
+        const elements = doc.querySelectorAll(`[data-block-type="${blockType}"]`);
         elements.forEach((el) => {
             const idx = parseInt(el.getAttribute("data-block-index") ?? "0");
             const override = Object.values(overrides).find(
@@ -216,7 +236,8 @@ export function buildFinalHtml(
             );
             const style = mergeStyle(baseStyle, override?.style);
 
-            const hasAny = style.color || style.background || style.fontSize || style.fontWeight || style.cssClass || style.textDecoration;
+            const hasAny = style.color || style.background || style.fontSize
+                || style.fontWeight || style.cssClass || style.textDecoration;
             if (!hasAny) return;
 
             const extraClasses = mergeClasses(
@@ -244,7 +265,14 @@ export function buildFinalHtml(
         });
     }
 
-    return doc.querySelector("div")!.innerHTML;
+    // Step 3: 把 table placeholder 換回原本的 table
+    let result = doc.querySelector("div")!.innerHTML;
+    result = result.replace(
+        /<div data-table-placeholder="(\d+)"><\/div>/g,
+        (_, idx) => tablePlaceholders[parseInt(idx)]
+    );
+
+    return result;
 }
 
 /* ============================= */
@@ -311,6 +339,8 @@ function updateBlockComment(
     const isListItem =
         blockType === "bulleted_list_item" || blockType === "numbered_list_item";
 
+    const isTableBlock = blockType === "table";
+
     const regex = new RegExp(
         `<!-- ${wpTag}(\\s+(\\{[\\s\\S]*?\\}))?(\\s*)-->`,
         "g"
@@ -318,7 +348,7 @@ function updateBlockComment(
 
     const counter = { count: 0 };
 
-    return html.replace(regex, (match, _withJson, jsonPart, _ws, offset: number) => {
+    let result = html.replace(regex, (match, _withJson, jsonPart, _ws, offset: number) => {
         let attrs: Record<string, any> = {};
         if (jsonPart?.trim()) {
             try { attrs = JSON.parse(jsonPart.trim()); } catch { return match; }
@@ -385,6 +415,22 @@ function updateBlockComment(
         const jsonStr = JSON.stringify(attrs);
         return `<!-- ${wpTag}${jsonStr === "{}" ? "" : ` ${jsonStr}`} -->`;
     });
+
+    if (isTableBlock) {
+        result = result.replace(
+            /(<table\b[^>]*?style=")([^"]*)"/g,
+            (_, tagStart, styleContent) => {
+                const cleaned = styleContent
+                    .split(";")
+                    .map((s: string) => s.trim())
+                    .filter((s: string) => s && !s.startsWith("font-size"))
+                    .join("; ");
+                return cleaned ? `${tagStart}${cleaned}"` : tagStart.replace(/\s*style="/, "\"");
+            }
+        );
+    }
+
+    return result;
 }
 
 export function removeDeletedBlocks(
