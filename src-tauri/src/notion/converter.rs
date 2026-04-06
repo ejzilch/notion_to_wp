@@ -270,7 +270,10 @@ async fn convert_block_to_html(
 
         "table" => {
             let table_id = block["id"].as_str().unwrap_or("");
-            let has_header = block["table"]["has_column_header"]
+            let has_col_header = block["table"]["has_column_header"]
+                .as_bool()
+                .unwrap_or(false);
+            let has_row_header = block["table"]["has_row_header"]
                 .as_bool()
                 .unwrap_or(false);
 
@@ -281,36 +284,31 @@ async fn convert_block_to_html(
 
                     for (i, row) in rows.iter().enumerate() {
                         let mut cells_html = Vec::new();
-                        if let Some(cells) =
-                            row["table_row"]["cells"].as_array()
-                        {
-                            for cell in cells {
-                                let tag =
-                                    if i == 0 && has_header { "th" } else { "td" };
-                                let content =
-                                    if let Some(cell_array) = cell.as_array() {
-                                        process_rich_text_array(cell_array)
-                                    } else {
-                                        String::new()
-                                    };
-                                cells_html.push(format!(
-                                    "<{}>{}</{}>",
-                                    tag, content, tag
-                                ));
+                        if let Some(cells) = row["table_row"]["cells"].as_array() {
+                            for (j, cell) in cells.iter().enumerate() {
+                                let tag = if (i == 0 && has_col_header) || (j == 0 && has_row_header) {
+                                    "th"
+                                } else {
+                                    "td"
+                                };
+                                let content = if let Some(cell_array) = cell.as_array() {
+                                    process_rich_text_array(cell_array)
+                                } else {
+                                    String::new()
+                                };
+                                cells_html.push(format!("<{}>{}</{}>", tag, content, tag));
                             }
                         }
-                        let row_str =
-                            format!("<tr>{}</tr>", cells_html.concat());
-                        if i == 0 && has_header {
-                            head_html =
-                                format!("<thead>{}</thead>", row_str);
+                        let row_str = format!("<tr>{}</tr>", cells_html.concat());
+                        if i == 0 && has_col_header {
+                            head_html = format!("<thead>{}</thead>", row_str);
                         } else {
                             tr_list.push(row_str);
                         }
                     }
 
                     format!(
-                        "\n<!-- wp:table -->\n<figure class=\"wp-block-table\"><table>{}{}</table></figure>\n<!-- /wp:table -->\n",
+                        "\n<!-- wp:table {{\"hasFixedLayout\":true}} -->\n<figure class=\"wp-block-table\"><table class=\"has-fixed-layout\">{}{}</table></figure>\n<!-- /wp:table -->\n",
                         head_html,
                         format!("<tbody>{}</tbody>", tr_list.concat())
                     )
