@@ -250,9 +250,38 @@ async fn convert_block_to_html(
 
         "quote" => {
             let content = extract_rich_text(&block, "quote");
+            let mut nested_content = String::new();
+
+            if block["has_children"].as_bool() == Some(true) {
+                if let Ok(children) = fetch_all_blocks(
+                    &client,
+                    block["id"].as_str().unwrap_or(""),
+                    &token,
+                ).await {
+                    nested_content = blocks_to_wp_html(
+                        Arc::clone(&client),
+                        &children,
+                        &token,
+                        Arc::clone(&cache),
+                    ).await;
+                }
+            }
+
+            // 第一行的 content 包成 wp:paragraph
+            let first_para = if !content.is_empty() {
+                format!(
+                    "<!-- wp:paragraph -->\n<p>{}</p>\n<!-- /wp:paragraph -->\n",
+                    content
+                )
+            } else {
+                String::new()
+            };
+
+            // 整個用 wp:quote block comment 包起來
             format!(
-                "\n<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\"><p>{}</p></blockquote>\n<!-- /wp:quote -->\n",
-                content
+                "<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\">\n{}{}</blockquote>\n<!-- /wp:quote -->\n\n",
+                first_para,
+                nested_content
             )
         }
 
@@ -308,7 +337,7 @@ async fn convert_block_to_html(
                     }
 
                     format!(
-                        "\n<!-- wp:table {{\"hasFixedLayout\":true}} -->\n<figure class=\"wp-block-table\"><table class=\"has-fixed-layout\">{}{}</table></figure>\n<!-- /wp:table -->\n",
+                        "\n<!-- wp:table {{\"hasFixedLayout\":false}} -->\n<figure class=\"wp-block-table\"><table class=\"\">{}{}</table></figure>\n<!-- /wp:table -->\n",
                         head_html,
                         format!("<tbody>{}</tbody>", tr_list.concat())
                     )
@@ -384,7 +413,7 @@ async fn format_callout(
     cache: HtmlCache,
 ) -> String {
     let callout_data = &block["callout"];
-    let icon = callout_data["icon"]["emoji"].as_str().unwrap_or("💡");
+    let icon = callout_data["icon"]["emoji"].as_str().unwrap_or("");
     let first_line = extract_rich_text(&block, "callout");
 
     let mut sub_content = String::new();

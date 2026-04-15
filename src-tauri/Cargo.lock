@@ -2119,7 +2119,7 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "notion_to_wp"
-version = "1.0.5"
+version = "1.0.7"
 dependencies = [
  "anyhow",
  "async-recursion",

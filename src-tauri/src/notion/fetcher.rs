@@ -13,13 +13,9 @@ pub async fn fetch_all_blocks(
     const MAX_PAGE_SIZE: u32 = 100;
 
     loop {
-        let url = format!(
-            "https://api.notion.com/v1/blocks/{}/children",
-            page_id
-        );
+        let url = format!("https://api.notion.com/v1/blocks/{}/children", page_id);
 
-        let mut params: Vec<(&str, String)> =
-            vec![("page_size", MAX_PAGE_SIZE.to_string())];
+        let mut params: Vec<(&str, String)> = vec![("page_size", MAX_PAGE_SIZE.to_string())];
 
         if let Some(ref c) = cursor {
             params.push(("start_cursor", c.clone()));
@@ -38,9 +34,7 @@ pub async fn fetch_all_blocks(
         }
 
         if response["has_more"].as_bool().unwrap_or(false) {
-            cursor = response["next_cursor"]
-                .as_str()
-                .map(|s| s.to_string());
+            cursor = response["next_cursor"].as_str().map(|s| s.to_string());
         } else {
             break;
         }
@@ -49,9 +43,7 @@ pub async fn fetch_all_blocks(
     Ok(all_blocks)
 }
 
-async fn fetch_with_retry(
-    request: reqwest::RequestBuilder,
-) -> anyhow::Result<Value> {
+async fn fetch_with_retry(request: reqwest::RequestBuilder) -> anyhow::Result<Value> {
     let mut delay = Duration::from_millis(500);
 
     for attempt in 0..4u32 {
