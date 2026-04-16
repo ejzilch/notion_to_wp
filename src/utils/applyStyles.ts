@@ -331,8 +331,6 @@ function updateBlockComment(
     const isListItem =
         blockType === "bulleted_list_item" || blockType === "numbered_list_item";
 
-    const isTableBlock = blockType === "table";
-
     const regex = new RegExp(
         `<!-- ${wpTag}(\\s+(\\{[\\s\\S]*?\\}))?(\\s*)-->`,
         "g"
