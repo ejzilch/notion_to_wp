@@ -17,7 +17,7 @@ const BLOCK_CONFIG: Partial<Record<BlockType, BlockRenderConfig>> = {
     paragraph: { wpTag: "wp:paragraph", htmlTag: "p", styleTarget: "p" },
     quote: { wpTag: "wp:quote", htmlTag: "blockquote", styleTarget: "blockquote" },
     code: { wpTag: "wp:code", htmlTag: "pre", styleTarget: "pre" },
-    table: { wpTag: "wp:table", htmlTag: "table", styleTarget: "table" },
+    table: { wpTag: "wp:table", htmlTag: "figure", styleTarget: "figure.wp-block-table" },
     callout: { wpTag: "wp:group", htmlTag: "div", styleTarget: ".wp-block-group" },
 
     // 核心：list
@@ -145,24 +145,33 @@ export function buildFinalHtml(
     // Step 0: 把所有 table 抽出來，換成 placeholder
     const tablePlaceholders: string[] = [];
     const htmlWithoutTables = html.replace(
-        /(<figure class="wp-block-table">)([\s\S]*?)(<\/figure>)/g,
-        (_match, open, inner, close) => {
+        /(<figure class="wp-block-table")(>)([\s\S]*?)(<\/figure>)/g,
+        (_match, openTagStart, openTagEnd, inner, close) => {
             const idx = tablePlaceholders.length;
             const tableStyle = config["table"];
+
             const inlineStyles: string[] = [];
             if (tableStyle?.fontSize) inlineStyles.push(`font-size:${tableStyle.fontSize}`);
             if (tableStyle?.color) inlineStyles.push(`color:${tableStyle.color}`);
             if (tableStyle?.background) inlineStyles.push(`background-color:${tableStyle.background}`);
             if (tableStyle?.fontWeight) inlineStyles.push(`font-weight:${tableStyle.fontWeight}`);
 
+            const styleAttr = inlineStyles.length
+                ? ` style="${inlineStyles.join(";")}"`
+                : "";
+
+            // style 加在 figure
+            const newOpenTag = `${openTagStart}${styleAttr}${openTagEnd}`;
+
+            // table 只保留 data 標記（不加 style）
             const markedInner = inner.replace(
                 /(<table)(\s[^>]*|)(>)/,
                 (_: string, tag: string, attrs: string, gtClose: string) => {
-                    const styleAttr = inlineStyles.length ? ` style="${inlineStyles.join(";")}"` : "";
-                    return `${tag}${attrs} data-block-type="table" data-block-index="${idx}"${styleAttr}${gtClose}`;
+                    return `${tag}${attrs} data-block-type="table" data-block-index="${idx}"${gtClose}`;
                 }
             );
-            tablePlaceholders.push(`${open}${markedInner}${close}`);
+
+            tablePlaceholders.push(`${newOpenTag}${markedInner}${close}`);
             return `<div data-table-placeholder="${idx}"></div>`;
         }
     );
@@ -398,20 +407,6 @@ function updateBlockComment(
         const jsonStr = JSON.stringify(attrs);
         return `<!-- ${wpTag}${jsonStr === "{}" ? "" : ` ${jsonStr}`} -->`;
     });
-
-    if (isTableBlock) {
-        result = result.replace(
-            /(<table\b[^>]*?style=")([^"]*)"/g,
-            (_, tagStart, styleContent) => {
-                const cleaned = styleContent
-                    .split(";")
-                    .map((s: string) => s.trim())
-                    .filter((s: string) => s && !s.startsWith("font-size"))
-                    .join("; ");
-                return cleaned ? `${tagStart}${cleaned}"` : tagStart.replace(/\s*style="/, "\"");
-            }
-        );
-    }
 
     return result;
 }
