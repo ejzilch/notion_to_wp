@@ -491,27 +491,33 @@ fn process_rich_text_array(rich_texts: &[Value]) -> String {
         let annotations = &rt["annotations"];
         let mut formatted = html_escape(plain_text).replace('\n', "<br>");
 
-        if annotations["bold"].as_bool() == Some(true) {
-            formatted = format!("<strong>{}</strong>", formatted);
+        if let Some(link) = rt["href"].as_str() {
+            formatted = format!("<a href=\"{}\" target=\"_blank\">{}</a>", link, formatted);
         }
-        if annotations["italic"].as_bool() == Some(true) {
-            formatted = format!("<em>{}</em>", formatted);
+
+        if annotations["code"].as_bool() == Some(true) {
+            formatted = format!("<code>{}</code>", formatted);
         }
+
         if annotations["strikethrough"].as_bool() == Some(true) {
             formatted = format!("<del>{}</del>", formatted);
         }
+
         if annotations["underline"].as_bool() == Some(true) {
             formatted = format!(
                 "<span style=\"text-decoration: underline;\">{}</span>",
                 formatted
             );
         }
-        if annotations["code"].as_bool() == Some(true) {
-            formatted = format!("<code>{}</code>", formatted);
+
+        if annotations["italic"].as_bool() == Some(true) {
+            formatted = format!("<em>{}</em>", formatted);
         }
-        if let Some(link) = rt["href"].as_str() {
-            formatted = format!("<a href=\"{}\" target=\"_blank\">{}</a>", link, formatted);
+
+        if annotations["bold"].as_bool() == Some(true) {
+            formatted = format!("<strong>{}</strong>", formatted);
         }
+
         html.push_str(&formatted);
     }
     html
