@@ -262,11 +262,50 @@ export function buildFinalHtml(
         });
     }
 
+    // 額外處理所有 <a>
+    const linkStyle = config["link"];
+    if (linkStyle?.color) {
+        doc.querySelectorAll("a").forEach((a) => {
+            const existing = a.getAttribute("style") ?? "";
+            const alreadyHasColor = /color\s*:/.test(existing);
+            if (!alreadyHasColor) {
+                const newStyle = existing
+                    ? `${existing.replace(/;+$/, "")};color:${linkStyle.color}`
+                    : `color:${linkStyle.color}`;
+                a.setAttribute("style", newStyle);
+            }
+        });
+    }
+
     // Step 3: 把 table placeholder 換回原本的 table
     let result = doc.querySelector("div")!.innerHTML;
     result = result.replace(
         /<div data-table-placeholder="(\d+)"><\/div>/g,
-        (_, idx) => tablePlaceholders[parseInt(idx)]
+        (_, idx) => {
+            let tableHtml = tablePlaceholders[parseInt(idx)];
+
+            const linkStyle = config["link"];
+            if (linkStyle?.color) {
+                const markStyle = [
+                    `background-color:rgba(0, 0, 0, 0)`,
+                    `color:${linkStyle.color}`,
+                    linkStyle.fontWeight ? `font-weight:${linkStyle.fontWeight}` : "",
+                    linkStyle.fontSize ? `font-size:${linkStyle.fontSize}` : "",
+                    linkStyle.textDecoration ? `text-decoration:${linkStyle.textDecoration}` : "",
+                ].filter(Boolean).join(";");
+
+                tableHtml = tableHtml.replace(
+                    /(<a\s[^>]*>)([\s\S]*?)(<\/a>)/g,
+                    (match, openTag, innerContent, closeTag) => {
+                        // 已經有 <mark> 就跳過，避免重複包
+                        if (/<mark/.test(innerContent)) return match;
+                        return `${openTag}<mark style="${markStyle}" class="has-inline-color">${innerContent}</mark>${closeTag}`;
+                    }
+                );
+            }
+
+            return tableHtml;
+        }
     );
 
     return result;
